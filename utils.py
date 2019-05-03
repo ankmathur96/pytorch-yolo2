@@ -234,7 +234,7 @@ def plot_boxes_cv2(img, boxes, savename=None, class_names=None, color=None):
         cv2.imwrite(savename, img)
     return img
 
-def plot_boxes(img, boxes, savename=None, class_names=None):
+def plot_boxes(img, boxes, savename=None, class_names=None, log=False):
     colors = torch.FloatTensor([[1,0,1],[0,0,1],[0,1,1],[0,1,0],[1,1,0],[1,0,0]]);
     def get_color(c, x, max_val):
         ratio = float(x)/max_val * 5
@@ -258,7 +258,8 @@ def plot_boxes(img, boxes, savename=None, class_names=None):
         if len(box) >= 7 and class_names:
             cls_conf = box[5]
             cls_id = box[6]
-            print('%s: %f' % (class_names[cls_id], cls_conf))
+            if log:
+                print('%s: %f' % (class_names[cls_id], cls_conf))
             classes = len(class_names)
             offset = cls_id * 123457 % classes
             red   = get_color(2, offset, classes)
@@ -268,7 +269,8 @@ def plot_boxes(img, boxes, savename=None, class_names=None):
             draw.text((x1, y1), class_names[cls_id], fill=rgb)
         draw.rectangle([x1, y1, x2, y2], outline = rgb)
     if savename:
-        print("save plot results to %s" % savename)
+        if log:
+            print("save plot results to %s" % savename)
         img.save(savename)
     return img
 
@@ -322,17 +324,17 @@ def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
         img = img.float().div(255.0)
     elif type(img) == np.ndarray: # cv2 image
         img = torch.from_numpy(img.transpose(2,0,1)).float().div(255.0).unsqueeze(0)
+    elif type(img) == torch.Tensor: # a Tensor from a Dataset
+        pass
     else:
-        print("unknow image type")
+        print("Unknown input type: PIL Image, CV2 Image (as a numpy array), and Torch Tensor supported")
         exit(-1)
-
     t1 = time.time()
 
     if use_cuda:
         img = img.cuda()
     img = torch.autograd.Variable(img)
     t2 = time.time()
-
     output = model(img)
     output = output.data
     #for j in range(100):
@@ -340,12 +342,9 @@ def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
     #print('')
     t3 = time.time()
 
-    boxes = get_region_boxes(output, conf_thresh, model.num_classes, model.anchors, model.num_anchors)[0]
-    #for j in range(len(boxes)):
-    #    print(boxes[j])
+    boxes = get_region_boxes(output, conf_thresh, model.num_classes, model.anchors, model.num_anchors)
     t4 = time.time()
-
-    boxes = nms(boxes, nms_thresh)
+    batch_boxes = [nms(b, nms_thresh) for b in boxes]
     t5 = time.time()
 
     if False:
@@ -357,7 +356,7 @@ def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
         print('             nms : %f' % (t5 - t4))
         print('           total : %f' % (t5 - t0))
         print('-----------------------------------')
-    return boxes
+    return batch_boxes
 
 def read_data_cfg(datacfg):
     options = dict()
