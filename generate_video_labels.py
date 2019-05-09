@@ -41,31 +41,11 @@ def process_batch(img_orig_height, img_orig_width, boxes):
         all_box_predictions.append(predictions)
     return all_box_predictions
 
-def main(args):
-    m = Darknet(args.darknet_config_file)
-    m.print_network()
-    m.load_weights(args.darknet_weights_file)
-    print('Loaded weights')
-    if m.num_classes == 20:
-        names_file = 'data/voc.names'
-    elif m.num_classes == 80:
-        names_file = 'data/coco.names'
-    else:
-        print('Using default names')
-        names_file = 'data/names'
-    m = m.cuda()
-    def input_transform(im):
-        im = cv2.resize(im, (m.width, m.height))
-        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-        im = im.transpose(2, 0, 1)
-        return im
-    class_names = load_class_names(names_file)
-    train_loader, val_loader, stats = get_video_dataset(args.root_dir, args.video_name, batch_size=args.batch_size, input_transform=input_transform, use_dummy_labels=True)
+def run_model(m, img_loader, labels_path, class_names, stats, args):
     c = 0
-    labels_path = os.path.join(args.root_dir, 'labels', args.video_name + '.csv')
     with open(labels_path, 'w') as csv_file:
         pred_writer = csv.writer(csv_file, delimiter=',')
-        for i, orig_img in train_loader:
+        for i, orig_img in img_loader:
             batch_boxes = do_detect(m, i, 0.5, 0.4, use_cuda=True)
             predictions = process_batch(stats['height'], stats['width'], batch_boxes)
             if args.save_pred:
@@ -87,6 +67,30 @@ def main(args):
             print('Inference: c = {}'.format(c))
 
 
+def main(args):
+    m = Darknet(args.darknet_config_file)
+    m.print_network()
+    m.load_weights(args.darknet_weights_file)
+    print('Loaded weights')
+    if m.num_classes == 20:
+        names_file = 'data/voc.names'
+    elif m.num_classes == 80:
+        names_file = 'data/coco.names'
+    else:
+        print('Using default names')
+        names_file = 'data/names'
+    m = m.cuda()
+    def input_transform(im):
+        im = cv2.resize(im, (m.width, m.height))
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        im = im.transpose(2, 0, 1)
+        return im
+    class_names = load_class_names(names_file)
+    train_loader, val_loader, stats = get_video_dataset(args.root_dir, args.video_name, batch_size=args.batch_size, input_transform=input_transform, use_dummy_labels=True, val_frac=0.1, video_sample=0.1)
+    train_labels_path = os.path.join(args.root_dir, 'labels', args.video_name + '_train.csv')
+    val_labels_path = os.path.join(args.root_dir, 'labels', args.video_name + '_val.csv')
+    run_model(m, train_loader, train_labels_path, class_names, stats, args)
+    run_model(m, val_loader, val_labels_path, class_names, stats, args)
 
 if __name__ == '__main__':
     args = parser.parse_args()
