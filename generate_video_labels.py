@@ -86,7 +86,7 @@ def main(args):
         im = im.transpose(2, 0, 1)
         return im
     class_names = load_class_names(names_file)
-    train_loader, val_loader, stats = get_video_dataset(args.root_dir, args.video_name, batch_size=args.batch_size, input_transform=input_transform, use_dummy_labels=True, val_frac=0.1, video_sample=0.1)
+    train_loader, val_loader, stats = get_video_dataset(args.root_dir, args.video_name, batch_size=args.batch_size, input_transform=input_transform, use_dummy_labels=True, val_frac=0.1)
     train_labels_path = os.path.join(args.root_dir, 'labels', args.video_name + '_train.csv')
     val_labels_path = os.path.join(args.root_dir, 'labels', args.video_name + '_val.csv')
     run_model(m, train_loader, train_labels_path, class_names, stats, args)
